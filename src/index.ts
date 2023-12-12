@@ -123,7 +123,6 @@ app.get('/getCoinsList/:limit_per_page/:num_of_page', async (req: Request, res: 
     const response = await axios.get<CoinListData[]>(
       `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${limit_per_page}&page=${num_of_page}&sparkline=false&locale=en`
     );
-    console.log(response)
     const coinsList = response.data;
     const filteredDataForCoinsList = coinsList.map((coin) => ({
       id: coin.id,

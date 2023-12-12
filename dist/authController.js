@@ -24,7 +24,6 @@ class authController {
             try {
                 const errors = validationResult(req);
                 if (!errors.isEmpty()) {
-                    console.log(errors);
                     return res.status(400).json({ message: "Error in registration", errors });
                 }
                 const { username, password } = req.body;
