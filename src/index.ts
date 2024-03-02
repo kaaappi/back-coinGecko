@@ -180,3 +180,5 @@ app.get('/getChartForCoin/:coin_id/:days', cacheMiddleware(30), async (req: Requ
 });
 
 start();
+
+export default app;
