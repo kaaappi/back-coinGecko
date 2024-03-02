@@ -3,8 +3,7 @@ import axios from 'axios';
 import mongoose from "mongoose"
 import cors from 'cors';
 import authRouter from "./authRouter.js";
-import authMiddleware from "./middleware/authMiddleware.js";
-
+import cache from "memory-cache"
 const PORT = 4000;
 const app = express();
 
@@ -82,11 +81,31 @@ interface CoinListData {
   total_volume: number;
 }
 
-app.get('/getCoinData/:coin_id', async (req: Request, res: Response) => {
+const cacheMiddleware = (duration) => {
+  return (req, res, next) => {
+    let key = '__express__' + req.originalUrl || req.url;
+    let cachedBody = cache.get(key);
+    if (cachedBody) {
+      res.send(JSON.parse(cachedBody));
+      return;
+    } else {
+      res.sendResponse = res.send;
+      res.send = (body) => {
+        cache.put(key, body, duration * 1000);
+        res.sendResponse(body);
+      };
+      next();
+    }
+  };
+};
+
+
+app.get('/getCoinData/:coin_id', cacheMiddleware(30),async (req: Request, res: Response) => {
   const {coin_id} = req.params;
   try {
     const response = await axios.get<SingleCoinState>(`https://api.coingecko.com/api/v3/coins/${coin_id}?tickers=true&market_data=true`);
     const coinData = response.data;
+    console.log(response.data)
     const filteredDataForSingleCoin = {
       id: coinData.id,
       name: coinData.name,
@@ -117,12 +136,13 @@ app.get('/getCoinData/:coin_id', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/getCoinsList/:limit_per_page/:num_of_page', async (req: Request, res: Response) => {
+app.get('/getCoinsList/:limit_per_page/:num_of_page',  cacheMiddleware(30),async (req: Request, res: Response) => {
   const {limit_per_page, num_of_page} = req.params;
   try {
     const response = await axios.get<CoinListData[]>(
       `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${limit_per_page}&page=${num_of_page}&sparkline=false&locale=en`
     );
+
     const coinsList = response.data;
     const filteredDataForCoinsList = coinsList.map((coin) => ({
       id: coin.id,
@@ -140,13 +160,14 @@ app.get('/getCoinsList/:limit_per_page/:num_of_page', async (req: Request, res: 
       res.status(429).json({error: `${error.response.error_message}`});
     }
     else {
+
       res.status(500).json({error: `Failed to fetch data for coins list: ${error.response?.statusText}`});
     }
 
   }
 });
 
-app.get('/getChartForCoin/:coin_id/:days', async (req: Request, res: Response) => {
+app.get('/getChartForCoin/:coin_id/:days', cacheMiddleware(30), async (req: Request, res: Response) => {
   const {coin_id, days} = req.params;
   try {
     const response = await axios.get(`https://api.coingecko.com/api/v3/coins/${coin_id}/market_chart?vs_currency=usd&days=${days}`);

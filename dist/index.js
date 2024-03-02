@@ -12,6 +12,7 @@ import axios from 'axios';
 import mongoose from "mongoose";
 import cors from 'cors';
 import authRouter from "./authRouter.js";
+import cache from "memory-cache";
 const PORT = 4000;
 const app = express();
 app.use(cors());
@@ -26,11 +27,30 @@ const start = () => __awaiter(void 0, void 0, void 0, function* () {
         console.log(e);
     }
 });
-app.get('/getCoinData/:coin_id', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+const cacheMiddleware = (duration) => {
+    return (req, res, next) => {
+        let key = '__express__' + req.originalUrl || req.url;
+        let cachedBody = cache.get(key);
+        if (cachedBody) {
+            res.send(JSON.parse(cachedBody));
+            return;
+        }
+        else {
+            res.sendResponse = res.send;
+            res.send = (body) => {
+                cache.put(key, body, duration * 1000);
+                res.sendResponse(body);
+            };
+            next();
+        }
+    };
+};
+app.get('/getCoinData/:coin_id', cacheMiddleware(30), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { coin_id } = req.params;
     try {
         const response = yield axios.get(`https://api.coingecko.com/api/v3/coins/${coin_id}?tickers=true&market_data=true`);
         const coinData = response.data;
+        console.log(response.data);
         const filteredDataForSingleCoin = {
             id: coinData.id,
             name: coinData.name,
@@ -61,7 +81,7 @@ app.get('/getCoinData/:coin_id', (req, res) => __awaiter(void 0, void 0, void 0,
         res.status(500).json({ error: 'Failed to fetch data for coin' });
     }
 }));
-app.get('/getCoinsList/:limit_per_page/:num_of_page', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get('/getCoinsList/:limit_per_page/:num_of_page', cacheMiddleware(30), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b;
     const { limit_per_page, num_of_page } = req.params;
     try {
@@ -88,7 +108,7 @@ app.get('/getCoinsList/:limit_per_page/:num_of_page', (req, res) => __awaiter(vo
         }
     }
 }));
-app.get('/getChartForCoin/:coin_id/:days', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get('/getChartForCoin/:coin_id/:days', cacheMiddleware(30), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { coin_id, days } = req.params;
     try {
         const response = yield axios.get(`https://api.coingecko.com/api/v3/coins/${coin_id}/market_chart?vs_currency=usd&days=${days}`);
